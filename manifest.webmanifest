@@ -1,0 +1,47 @@
+{
+ "name": "Hanbit Studio",
+ "short_name": "Hanbit Studio",
+ "description": "An offline music studio (DAW) for iPad",
+ "lang": "en",
+ "start_url": "./index.html",
+ "scope": "./",
+ "display": "standalone",
+ "orientation": "any",
+ "background_color": "#18181a",
+ "theme_color": "#28282c",
+ "icons": [
+  {
+   "src": "icon-192.png",
+   "sizes": "192x192",
+   "type": "image/png"
+  },
+  {
+   "src": "icon-512.png",
+   "sizes": "512x512",
+   "type": "image/png"
+  },
+  {
+   "src": "icon-maskable-512.png",
+   "sizes": "512x512",
+   "type": "image/png",
+   "purpose": "maskable"
+  }
+ ],
+ "file_handlers": [
+  {
+   "action": "./index.html",
+   "accept": {
+    "application/json": [
+     ".json"
+    ],
+    "audio/midi": [
+     ".mid",
+     ".midi"
+    ],
+    "text/javascript": [
+     ".js"
+    ]
+   }
+  }
+ ]
+}
