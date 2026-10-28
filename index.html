@@ -189,6 +189,7 @@ select.sel{height:28px;border-radius:6px;border:1px solid var(--line2);backgroun
 .ptab:hover{color:var(--ink);background:rgba(255,255,255,.04)}
 .ptab[aria-selected="true"]{background:var(--panel3);color:var(--ink);box-shadow:0 1px 2px rgba(0,0,0,.35)}
 .ptab-title{margin-left:auto;font-size:12px;color:var(--ink3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;padding:0 6px}
+.ptab-max{flex:none;padding:0 8px;color:var(--ink2)}
 .pbody{flex:1;min-height:0;position:relative}
 .pv{position:absolute;inset:0;display:flex;flex-direction:column;min-height:0}
 .ptool{flex:none;min-height:40px;display:flex;align-items:center;gap:6px;padding:5px 10px;border-bottom:1px solid var(--line);flex-wrap:wrap;background:var(--panel)}
@@ -464,6 +465,20 @@ select.sel{height:28px;border-radius:6px;border:1px solid var(--line2);backgroun
   .rk-list{width:130px}
   .atools .tlbl{display:none}
 }
+/* landscape only: on touch screens a portrait viewport is covered by a rotate prompt */
+.rotate{display:none}
+@media (orientation:portrait) and (pointer:coarse){
+  .rotate{display:flex;position:fixed;inset:0;z-index:1000;flex-direction:column;align-items:center;justify-content:center;gap:14px;
+    padding:max(24px,env(safe-area-inset-top,0px)) max(32px,env(safe-area-inset-right,0px)) max(24px,env(safe-area-inset-bottom,0px)) max(32px,env(safe-area-inset-left,0px));
+    background:radial-gradient(120% 80% at 50% 30%,#26262b,var(--bg) 70%);text-align:center;touch-action:none}
+  .rotate h2{margin:0;font-family:var(--fd);font-size:22px;font-weight:700;letter-spacing:-.01em;color:var(--ink)}
+  .rotate p{margin:0;max-width:340px;font-size:14px;line-height:1.5;color:var(--ink2)}
+  .rotate .rt-dev{fill:none;stroke:var(--ink);stroke-width:3;transform-origin:48px 42px;animation:rt-turn 2.4s ease-in-out infinite}
+  .rotate .rt-arrow{fill:none;stroke:var(--acc);stroke-width:3;stroke-linecap:round;stroke-linejoin:round}
+  .app,#layer{visibility:hidden}
+}
+@keyframes rt-turn{0%,25%{transform:rotate(0)}55%,100%{transform:rotate(-90deg)}}
+@media (prefers-reduced-motion:reduce){.rotate .rt-dev{animation:none;transform:rotate(-90deg)}}
 @media (prefers-reduced-motion:reduce){.tb-rec[aria-pressed="true"] .ic{animation:none}.toast{transition:none}}
 
 </style>
@@ -547,6 +562,14 @@ select.sel{height:28px;border-radius:6px;border:1px solid var(--line2);backgroun
   </div>
 </div>
 <div id="layer"></div>
+<div class="rotate" id="rotate" role="alert" aria-live="assertive">
+  <svg viewBox="0 0 96 96" width="88" height="88" aria-hidden="true">
+    <rect class="rt-dev" x="30" y="14" width="36" height="56" rx="6"/>
+    <path class="rt-arrow" d="M74 46a26 26 0 0 1-22 30"/><path class="rt-arrow" d="M58 70l-6 6 7 4"/>
+  </svg>
+  <h2>Rotate to Landscape</h2>
+  <p>Hanbit Studio is laid out for landscape. Turn your iPad sideways to keep working — playback keeps going meanwhile.</p>
+</div>
 
 <script>/* js/00-util.js */
 /* Hanbit Studio — core utilities. Every module hangs off the global HB namespace. */
@@ -753,8 +776,8 @@ HB.gest = function (el, o) {
     if (ptrs.size === 2 && o.pinch) {
       if (st) { st.pinched = true; endSingle(e, true); }
       const [a, b] = [...ptrs.values()];
-      pin = { d0: Math.hypot(a.x - b.x, a.y - b.y) || 1, cx0: (a.x + b.x) / 2, cy0: (a.y + b.y) / 2, last: null };
-      o.pinch({ phase: 'start', scale: 1, cx: pin.cx0, cy: pin.cy0, dx: 0, dy: 0, el });
+      pin = { d0: Math.hypot(a.x - b.x, a.y - b.y) || 1, wx0: Math.abs(a.x - b.x), wy0: Math.abs(a.y - b.y), cx0: (a.x + b.x) / 2, cy0: (a.y + b.y) / 2, last: null };
+      o.pinch({ phase: 'start', scale: 1, kx: 1, ky: 1, cx: pin.cx0, cy: pin.cy0, dx: 0, dy: 0, el });
       return;
     }
     if (ptrs.size > 1) return;
@@ -768,7 +791,9 @@ HB.gest = function (el, o) {
     ptrs.set(e.pointerId, { x: e.clientX, y: e.clientY });
     if (pin && ptrs.size >= 2) {
       const [a, b] = [...ptrs.values()], d = Math.hypot(a.x - b.x, a.y - b.y), cx = (a.x + b.x) / 2, cy = (a.y + b.y) / 2;
-      o.pinch({ phase: 'move', scale: d / pin.d0, cx, cy, dx: cx - pin.cx0, dy: cy - pin.cy0, el });
+      // kx / ky: stretch along each axis (1 when the fingers started too close on that axis to tell)
+      const kx = pin.wx0 > 40 ? Math.max(18, Math.abs(a.x - b.x)) / pin.wx0 : 1, ky = pin.wy0 > 40 ? Math.max(18, Math.abs(a.y - b.y)) / pin.wy0 : 1;
+      o.pinch({ phase: 'move', scale: d / pin.d0, kx, ky, cx, cy, dx: cx - pin.cx0, dy: cy - pin.cy0, el });
       return;
     }
     if (!st || st.id !== e.pointerId) return;
@@ -968,6 +993,8 @@ HB.ICONS = {
   follow: '<path d="M12 3v18"/><path d="M6 9l-3 3 3 3M18 9l3 3-3 3"/>',
   fx: '<path d="M5 19 9 5h3M7 12h5"/><path d="m13 11 6 8m0-8-6 8"/>',
   check: '<path d="m5 12 5 5 9-10"/>',
+  expand: '<path d="M14 4h6v6M10 20H4v-6M20 4l-7 7M4 20l7-7"/>',
+  shrink: '<path d="M20 10h-6V4M4 14h6v6M14 10l6-6M10 14l-6 6"/>',
   search: '<circle cx="11" cy="11" r="6"/><path d="m20 20-4.5-4.5"/>',
   midi: '<circle cx="12" cy="12" r="8"/><circle cx="8" cy="12" r="1" fill="currentColor"/><circle cx="16" cy="12" r="1" fill="currentColor"/><circle cx="12" cy="8" r="1" fill="currentColor"/><circle cx="9.2" cy="9.2" r="1" fill="currentColor"/><circle cx="14.8" cy="9.2" r="1" fill="currentColor"/>',
 };
@@ -1292,6 +1319,13 @@ registerProcessor('hb-recorder',HBRecorder);`;
     let t = $('#toast');
     if (!t) { t = h('div', { id: 'toast', class: 'toast', role: 'status' }); layer().appendChild(t); }
     t.textContent = msg; t.classList.add('show'); clearTimeout(tt); tt = setTimeout(() => t.classList.remove('show'), ms);
+  };
+
+  /* shown the first few times someone drags something that isn't selected yet */
+  ui.hintSelect = function () {
+    const n = HB.local.get('hint.select', 0); if (n >= 3) return;
+    HB.local.set('hint.select', n + 1);
+    ui.toast('Tap to select first, then drag to move. Dragging anything unselected scrolls the view.', 3400);
   };
 
   /* progress modal */
@@ -2613,16 +2647,21 @@ registerProcessor('hb-recorder',HBRecorder);`;
     const vol = el.querySelector('.th-vol');
     if (vol) {
       let start = null;
-      vol.addEventListener('pointerdown', e => { e.stopPropagation(); try { vol.setPointerCapture(e.pointerId); } catch (_) {} start = { x: e.clientX, p: HB.ui.dbToPos(t.vol), w: vol.clientWidth }; });
-      vol.addEventListener('pointermove', e => { if (!start) return; t.vol = Math.round(HB.ui.posToDb(start.p + (e.clientX - start.x) / start.w) * 10) / 10; HB.engine.strip(t.id) && HB.engine.strip(t.id).setVol(t.vol); updateVol(el, t); vol.title = 'Volume ' + HB.ui.fmtDb(t.vol) + ' dB'; HB.bus.emit('mix:vol', t.id); });
-      const end = () => { if (start) { start = null; M.dirty(); } };
+      // the track must be selected first; on an unselected track the first touch only selects it
+      vol.addEventListener('pointerdown', e => { e.stopPropagation(); if (HB.sel.track !== t.id) { HB.sel.setTrack(t.id); start = null; vol._hint = true; return; } try { vol.setPointerCapture(e.pointerId); } catch (_) {} start = { x: e.clientX, p: HB.ui.dbToPos(t.vol), w: vol.clientWidth }; });
+      vol.addEventListener('pointermove', e => { if (!start) { if (vol._hint && e.buttons) { vol._hint = false; HB.ui.hintSelect(); } return; } t.vol = Math.round(HB.ui.posToDb(start.p + (e.clientX - start.x) / start.w) * 10) / 10; HB.engine.strip(t.id) && HB.engine.strip(t.id).setVol(t.vol); updateVol(el, t); vol.title = 'Volume ' + HB.ui.fmtDb(t.vol) + ' dB'; HB.bus.emit('mix:vol', t.id); });
+      const end = () => { vol._hint = false; if (start) { start = null; M.dirty(); } };
       vol.addEventListener('pointerup', end); vol.addEventListener('pointercancel', end);
       vol.addEventListener('dblclick', () => { t.vol = 0; HB.changed('mix'); updateVol(el, t); });
     }
     // reorder by dragging the icon
     const ic = el.querySelector('.th-ic');
     let drag = null;
-    ic.addEventListener('pointerdown', e => { e.stopPropagation(); try { ic.setPointerCapture(e.pointerId); } catch (_) {} drag = { y0: e.clientY, i0: M.trackIndex(t.id), moved: false }; HB.sel.setTrack(t.id); });
+    ic.addEventListener('pointerdown', e => {
+      e.stopPropagation();
+      if (HB.sel.track !== t.id) { HB.sel.setTrack(t.id); drag = null; return; }   // select first, then drag to reorder
+      try { ic.setPointerCapture(e.pointerId); } catch (_) {} drag = { y0: e.clientY, i0: M.trackIndex(t.id), moved: false };
+    });
     ic.addEventListener('pointermove', e => {
       if (!drag) return; const dy = e.clientY - drag.y0;
       if (!drag.moved && Math.abs(dy) < 8) return;
@@ -2798,7 +2837,9 @@ registerProcessor('hb-recorder',HBRecorder);`;
         cancelAnimationFrame(inertia);
         const hh = hit(p);
         if (hh.r) {
-          if (!HB.sel.regions.has(hh.r.id)) HB.sel.setRegion(hh.r.id, st.shift || st.meta);
+          // a region must be selected (tapped) before it can be dragged; dragging an unselected one scrolls instead
+          if (st.shift || st.meta) return Object.assign(hh, { toggle: true });
+          if (!HB.sel.regions.has(hh.r.id)) return Object.assign(hh, { pend: true, sx: V().sx, sy: V().sy, vx: 0, vy: 0, lt: performance.now() });
           const sel = AR.selected();
           return Object.assign(hh, { orig: sel.map(x => ({ t: x.t, r: x.r, start: x.r.start, len: x.r.len, clen: x.r.clen, off: x.r.off || 0, notes: x.r.notes ? x.r.notes.map(n => n.s) : null })), sx: V().sx, sy: V().sy });
         }
@@ -2806,7 +2847,9 @@ registerProcessor('hb-recorder',HBRecorder);`;
       },
       move(p, e, st) {
         const d = st.data, v = V(); if (!d) return;
-        if (d.type === 'empty' || d.type === 'none') {
+        if (d.toggle) return;
+        if (d.type === 'empty' || d.type === 'none' || d.pend) {
+          if (d.pend && !d.hinted && Math.hypot(st.dx, st.dy) > 24) { d.hinted = true; HB.ui.hintSelect(); }
           const now = performance.now(), nsx = clamp(d.sx - st.dx, 0, 1e9), nsy = d.sy - st.dy;
           d.vx = (v.sx - nsx) / Math.max(1, now - d.lt) * 16; d.vy = (v.sy - nsy) / Math.max(1, now - d.lt) * 16; d.lt = now;
           v.sx = nsx; v.sy = nsy; AR.clampScroll(); AR.invalidate(); hdInner.style.transform = `translateY(${-v.sy}px)`; return;
@@ -2844,7 +2887,7 @@ registerProcessor('hb-recorder',HBRecorder);`;
       },
       up(p, e, st, cancel) {
         const d = st.data; if (!d) return;
-        if ((d.type === 'empty' || d.type === 'none') && st.moved) {
+        if ((d.type === 'empty' || d.type === 'none' || d.pend) && st.moved && !cancel) {
           let vx = d.vx || 0, vy = d.vy || 0; const v = V();
           const step = () => { vx *= 0.92; vy *= 0.92; v.sx = Math.max(0, v.sx - vx); v.sy -= vy; AR.clampScroll(); AR.invalidate(); hdInner.style.transform = `translateY(${-v.sy}px)`; if (Math.abs(vx) + Math.abs(vy) > 0.4) inertia = requestAnimationFrame(step); };
           if (Math.abs(vx) + Math.abs(vy) > 2) inertia = requestAnimationFrame(step);
@@ -2859,7 +2902,11 @@ registerProcessor('hb-recorder',HBRecorder);`;
       },
       tap(p, e, st) {
         const d = st.data; if (!d) return;
-        if (d.r) { if (st.shift || st.meta) { /* already toggled in down */ } else HB.sel.setRegion(d.r.id); AR.invalidate(); return; }
+        if (d.r) {
+          if (d.toggle) { if (HB.sel.regions.has(d.r.id)) { HB.sel.regions.delete(d.r.id); if (HB.sel.focus === d.r.id) HB.sel.focus = [...HB.sel.regions][0] || null; HB.bus.emit('sel'); } else HB.sel.setRegion(d.r.id, true); }
+          else HB.sel.setRegion(d.r.id);
+          AR.invalidate(); return;
+        }
         if (d.t) HB.sel.setTrack(d.t.id);
         HB.sel.clear(); HB.bus.emit('sel'); AR.invalidate();
       },
@@ -2997,7 +3044,7 @@ registerProcessor('hb-recorder',HBRecorder);`;
 <script>/* js/09-pianoroll.js */
 /* Piano roll editor for the focused MIDI region. */
 (() => {
-  const PR = HB.piano = { tool: HB.local.get('pr.tool', 'draw'), grid: 0.25, len: 0.25, vel: 0.8, px: 90, nh: 15, sx: 0, sy: 0, sel: new Set(), velLane: HB.local.get('pr.vel', true), scale: HB.local.get('pr.scale', false) };
+  const PR = HB.piano = { tool: HB.local.get('pr.tool', 'draw'), grid: 0.25, len: 0.25, vel: 0.8, px: 90, nh: 15, sx: 0, sy: 0, sel: new Set(), velLane: HB.local.get('pr.vel', true), scale: HB.local.get('pr.scale', false), follow: HB.local.get('pr.follow', true) };
   const M = HB.model, T = HB.transport, C = HB.color, MU = HB.music;
   const KEYW = 54, RH = 22;
   let root, cv, ov, emptyEl, need = true, regionId = null, toolEls = {}, held = null;
@@ -3024,7 +3071,7 @@ registerProcessor('hb-recorder',HBRecorder);`;
     PR.px = clamp(w / Math.max(r.len, 1), 18, 320); PR.sx = 0;
     let lo = 127, hi = 0; for (const n of r.notes) { lo = Math.min(lo, n.p); hi = Math.max(hi, n.p); }
     const mid = r.notes.length ? (lo + hi) / 2 : 60;
-    PR.nh = clamp(gridH() / Math.max(24, (hi - lo) + 10), 9, 22);
+    PR.nh = clamp(gridH() / Math.max(24, (hi - lo) + 10), HB.isTouch ? 13 : 9, 24);
     PR.sy = (127 - mid) * PR.nh - gridH() / 2; clampScroll(f); need = true;
   };
 
@@ -3160,36 +3207,61 @@ registerProcessor('hb-recorder',HBRecorder);`;
   PR.setVel = v => { const s = PR.selected(); if (!s.length) { PR.vel = v; return; } const ids = new Set(s.map(n => n.id)); PR.edit('Velocity', r => r.notes.forEach(n => { if (ids.has(n.id)) n.v = v; })); };
   PR.legato = () => { const f = cur(); if (!f) return; PR.edit('Legato', r => { const ns = [...r.notes].sort((a, b) => a.s - b.s); ns.forEach((n, i) => { const nx = ns.find((m, j) => j > i && m.s > n.s + 1e-6); if (nx) n.l = nx.s - n.s; }); }); };
 
+  /* view helpers */
+  let inertia = 0;
+  PR.zoomX = function (f, cx) {
+    const fr = cur(); if (!fr) return; if (cx == null) cx = KEYW + (W() - KEYW) / 2;
+    const b = bOf(cx); PR.px = clamp(PR.px * f, 12, 600); PR.sx = b * PR.px - (cx - KEYW); clampScroll(fr); need = true;
+  };
+  PR.zoomY = function (f, cy) {
+    const fr = cur(); if (!fr) return; if (cy == null) cy = RH + gridH() / 2;
+    const pc = (cy - RH + PR.sy) / PR.nh; PR.nh = clamp(PR.nh * f, 7, 32); PR.sy = pc * PR.nh - (cy - RH); clampScroll(fr); need = true;
+  };
+  const startInertia = d => {
+    let vx = d.vx || 0, vy = d.vy || 0;
+    const step = () => { const f = cur(); if (!f) return; vx *= 0.92; vy *= 0.92; PR.sx -= vx; PR.sy -= vy; clampScroll(f); need = true; if (Math.abs(vx) + Math.abs(vy) > 0.4) inertia = requestAnimationFrame(step); };
+    if (Math.abs(vx) + Math.abs(vy) > 2) inertia = requestAnimationFrame(step);
+  };
+
+  /* Editing rule: a note must be selected (tap it) before it can be dragged.
+     Dragging anything that is not selected — or empty space — scrolls the view instead. */
   function bind() {
     HB.gest(cv, {
-      threshold: 5,
+      threshold: 6,
       down(p, e, st) {
+        cancelAnimationFrame(inertia);
         const f = cur(); if (!f) return null; const r = f.r;
+        PR._touch = true;
         if (p.y < RH) return { type: 'ruler', sx: PR.sx };
         if (p.x < KEYW && p.y < RH + gridH()) { const pi = pOf(p.y); auditionStart(pi); return { type: 'key', sy: PR.sy, p: pi }; }
+        const pan = { sx: PR.sx, sy: PR.sy, vx: 0, vy: 0, lt: performance.now() };
         if (PR.velLane && p.y >= RH + gridH()) {
-          let best = null, bd = 12;
+          let best = null, bd = 14;
           for (const n of r.notes) { const d = Math.abs(xOf(n.s) - p.x); if (d < bd) { bd = d; best = n; } }
-          if (!best) return { type: 'none' };
-          const group = PR.sel.has(best.id) ? r.notes.filter(n => PR.sel.has(n.id)) : [best];
+          if (!best || !PR.sel.has(best.id)) return Object.assign({ type: 'pan', axis: 'x', pick: best, hint: !!best }, pan);
+          const group = r.notes.filter(n => PR.sel.has(n.id));
           return { type: 'vel', group, orig: group.map(n => n.v), ref: best };
         }
         const hn = hitNote(r, p);
         if (hn) {
-          if (!PR.sel.has(hn.n.id)) { if (!(st.shift || st.meta)) PR.sel.clear(); PR.sel.add(hn.n.id); }
-          else if (st.shift || st.meta) { PR.sel.delete(hn.n.id); need = true; return { type: 'none' }; }
-          need = true;
+          if (st.shift || st.meta) return { type: 'toggle', n: hn.n };
+          if (!PR.sel.has(hn.n.id)) return Object.assign({ type: 'pan', pick: hn.n, hint: true }, pan);
           const group = r.notes.filter(n => PR.sel.has(n.id));
-          if (!hn.edge) audition(hn.n.p, 0.2);
           return { type: hn.edge ? 'resize' : 'move', n: hn.n, group, orig: group.map(n => ({ s: n.s, l: n.l, p: n.p })), lastP: hn.n.p, alt: st.alt };
         }
         if (PR.tool === 'select' || st.shift) return { type: 'marq', x0: p.x, y0: p.y, base: st.shift ? new Set(PR.sel) : new Set() };
-        return { type: 'draw', b: snapDown(bOf(p.x)), p: pOf(p.y), sx: PR.sx, sy: PR.sy };
+        return Object.assign({ type: 'pan', add: { b: snapDown(bOf(p.x)), p: pOf(p.y) } }, pan);
       },
       move(p, e, st) {
         const d = st.data, f = cur(); if (!d || !f) return; const r = f.r;
         if (d.type === 'ruler') { PR.sx = d.sx - st.dx; clampScroll(f); need = true; return; }
         if (d.type === 'key') { PR.sy = d.sy - st.dy; clampScroll(f); need = true; return; }
+        if (d.type === 'pan') {
+          if (d.hint && !d.hinted && Math.hypot(st.dx, st.dy) > 24) { d.hinted = true; HB.ui.hintSelect(); }
+          const now = performance.now(), nsx = d.sx - st.dx, nsy = d.axis === 'x' ? PR.sy : d.sy - st.dy;
+          d.vx = (PR.sx - nsx) / Math.max(1, now - d.lt) * 16; d.vy = (PR.sy - nsy) / Math.max(1, now - d.lt) * 16; d.lt = now;
+          PR.sx = nsx; PR.sy = nsy; clampScroll(f); need = true; return;
+        }
         if (d.type === 'vel') {
           begin(st, 'Velocity');
           const y0 = RH + gridH(), v = clamp(1 - (p.y - y0 - 4) / (VH() - 12), 0.05, 1);
@@ -3199,7 +3271,7 @@ registerProcessor('hb-recorder',HBRecorder);`;
         }
         if (d.type === 'move') {
           begin(st, 'Move Notes');
-          if (d.alt && !d.copied) { d.copied = true; const add = []; for (const n of d.group) { const c = M.note(n.p, n.s, n.l, n.v); r.notes.push(c); add.push(c); } }
+          if (d.alt && !d.copied) { d.copied = true; for (const n of d.group) r.notes.push(M.note(n.p, n.s, n.l, n.v)); }
           const lead = d.orig[d.group.indexOf(d.n)];
           const ns = snap(lead.s + st.dx / PR.px), db = ns - lead.s, dp = Math.round(-st.dy / PR.nh);
           d.group.forEach((n, i) => { n.s = Math.max(0, d.orig[i].s + db); n.p = clamp(d.orig[i].p + dp, 0, 127); });
@@ -3216,41 +3288,39 @@ registerProcessor('hb-recorder',HBRecorder);`;
           PR.marq = { x0: Math.min(d.x0, p.x), y0: Math.min(d.y0, p.y), x1: Math.max(d.x0, p.x), y1: Math.max(d.y0, p.y) };
           const m = PR.marq, sel = new Set(d.base);
           for (const n of r.notes) { const x = xOf(n.s), x2 = x + n.l * PR.px, y = yOf(n.p); if (x2 >= m.x0 && x <= m.x1 && y + PR.nh >= m.y0 && y <= m.y1) sel.add(n.id); }
-          PR.sel = sel; need = true; return;
-        }
-        if (d.type === 'draw') {
-          if (!d.mode) d.mode = Math.abs(st.dy) > Math.abs(st.dx) * 1.3 ? 'pan' : 'len';
-          if (d.mode === 'pan') { PR.sx = d.sx - st.dx; PR.sy = d.sy - st.dy; clampScroll(f); need = true; return; }
-          begin(st, 'Draw Notes');
-          if (!d.note) { d.note = M.note(d.p, Math.max(0, d.b), PR.grid || 0.25, PR.vel); r.notes.push(d.note); PR.sel = new Set([d.note.id]); audition(d.p, 0.2); }
-          const e2 = Math.max(d.b + (PR.grid || 0.0625), snap(bOf(p.x)) || 0);
-          d.note.l = Math.max(PR.grid || 0.0625, e2 - d.b); PR.len = d.note.l; need = true;
+          PR.sel = sel; need = true;
         }
       },
-      up(p, e, st) {
+      up(p, e, st, cancel) {
+        PR._touch = false;
         const d = st.data; if (!d) return;
         if (d.type === 'key') auditionStop();
         if (d.type === 'marq') { PR.marq = null; need = true; }
+        if (d.type === 'pan' && st.moved && !cancel) startInertia(d);
         if (st.began) { const f = cur(); if (f) { f.r.notes.sort((a, b) => a.s - b.s); fitRegion(f.r); } HB.changed('notes'); }
       },
       tap(p, e, st) {
         const d = st.data, f = cur(); if (!d || !f) return;
         if (d.type === 'ruler') { T.setPos(f.r.start + Math.max(0, snap(bOf(p.x)))); return; }
-        if (d.type === 'draw') {
-          const s = Math.max(0, d.b), l = PR.len || PR.grid || 0.25;
-          let n; PR.edit('Add Note', r => { n = M.note(d.p, s, l, PR.vel); r.notes.push(n); r.notes.sort((a, b) => a.s - b.s); fitRegion(r); });
-          PR.sel = new Set([n.id]); audition(d.p, Math.min(0.5, l * 60 / HB.P.bpm));
-        } else if (d.type === 'move' || d.type === 'resize') { if (!(st.shift || st.meta)) { PR.sel = new Set([d.n.id]); } need = true; }
-        else if (d.type === 'marq') { if (!st.shift) PR.sel.clear(); need = true; }
+        if (d.type === 'pan' && d.pick) { PR.sel = new Set([d.pick.id]); audition(d.pick.p, 0.2); need = true; return; }
+        if (d.type === 'pan' && d.add) {
+          const s = Math.max(0, d.add.b), l = PR.len || PR.grid || 0.25;
+          let n; PR.edit('Add Note', r => { n = M.note(d.add.p, s, l, PR.vel); r.notes.push(n); r.notes.sort((a, b) => a.s - b.s); fitRegion(r); });
+          PR.sel = new Set([n.id]); audition(d.add.p, Math.min(0.5, l * 60 / HB.P.bpm));
+          return;
+        }
+        if (d.type === 'toggle') { if (PR.sel.has(d.n.id)) PR.sel.delete(d.n.id); else PR.sel.add(d.n.id); need = true; return; }
+        if (d.type === 'move' || d.type === 'resize') { if (!(st.shift || st.meta)) PR.sel = new Set([d.n.id]); audition(d.n.p, 0.2); need = true; return; }
+        if (d.type === 'marq') { if (!st.shift) PR.sel.clear(); need = true; }
       },
       dbl(p) {
-        const f = cur(); if (!f || p.y < RH || p.x < KEYW) return;
+        const f = cur(); if (!f || p.y < RH || p.x < KEYW || p.y >= RH + gridH()) return;
         const hn = hitNote(f.r, p);
         if (hn) { PR.edit('Delete Notes', r => { r.notes = r.notes.filter(n => n !== hn.n && n.id !== hn.n.id); }); PR.sel.delete(hn.n.id); }
       },
       long(p, e) {
         const f = cur(); if (!f) return; const hn = hitNote(f.r, p); if (!hn) return;
-        PR.sel.add(hn.n.id); need = true;
+        if (!PR.sel.has(hn.n.id)) PR.sel = new Set([hn.n.id]); need = true;
         HB.ui.menu({ x: e.clientX, y: e.clientY }, [
           { header: `${MU.name(hn.n.p)} · velocity ${Math.round(hn.n.v * 127)}` },
           { label: 'Duplicate', icon: 'dup', onClick: PR.duplicate },
@@ -3262,14 +3332,19 @@ registerProcessor('hb-recorder',HBRecorder);`;
       context(p, e) { this.long(p, e); },
       pinch(g) {
         const f = cur(); if (!f) return; const r = cv.getBoundingClientRect();
-        if (g.phase === 'start') { PR._pz = { px: PR.px, sx: PR.sx, sy: PR.sy, cx: g.cx - r.left }; return; }
-        if (g.phase === 'move' && PR._pz) { const z = PR._pz, b = (z.cx - KEYW + z.sx) / z.px; PR.px = clamp(z.px * g.scale, 12, 600); PR.sx = b * PR.px - (z.cx - KEYW) - g.dx; PR.sy = z.sy - g.dy; clampScroll(f); need = true; }
+        if (g.phase === 'start') { cancelAnimationFrame(inertia); PR._pz = { px: PR.px, nh: PR.nh, sx: PR.sx, sy: PR.sy, cx: g.cx - r.left, cy: g.cy - r.top }; return; }
+        if (g.phase === 'move' && PR._pz) {
+          // spread fingers sideways to zoom time, up/down to zoom pitch; moving both fingers scrolls
+          const z = PR._pz, b = (z.cx - KEYW + z.sx) / z.px, pc = (z.cy - RH + z.sy) / z.nh;
+          PR.px = clamp(z.px * g.kx, 12, 600); PR.nh = clamp(z.nh * g.ky, 7, 32);
+          PR.sx = b * PR.px - (z.cx - KEYW) - g.dx; PR.sy = pc * PR.nh - (z.cy - RH) - g.dy; clampScroll(f); need = true;
+        }
         if (g.phase === 'end') PR._pz = null;
       },
       wheel(e, p) {
         const f = cur(); if (!f) return;
-        if (e.ctrlKey || e.metaKey) { const b = bOf(p.x); PR.px = clamp(PR.px * Math.exp(-e.deltaY / 300), 12, 600); PR.sx = b * PR.px - (p.x - KEYW); }
-        else if (e.altKey) { PR.nh = clamp(PR.nh * Math.exp(-e.deltaY / 300), 7, 28); }
+        if (e.ctrlKey || e.metaKey) PR.zoomX(Math.exp(-e.deltaY / 300), p.x);
+        else if (e.altKey) PR.zoomY(Math.exp(-e.deltaY / 300), p.y);
         else if (e.shiftKey && !e.deltaX) PR.sx += e.deltaY; else { PR.sx += e.deltaX; PR.sy += e.deltaY; }
         clampScroll(f); need = true;
       },
@@ -3279,31 +3354,46 @@ registerProcessor('hb-recorder',HBRecorder);`;
   /* ---------------------------------------------------------- toolbar */
   const GRIDS = [['1/4', 1], ['1/8', 0.5], ['1/16', 0.25], ['1/32', 0.125], ['1/8T', 1 / 3], ['1/16T', 1 / 6], ['Off', 0]];
   function buildTools(bar) {
-    const toolSeg = HB.ui.seg([HB.h('span', { html: HB.icon('pencil', 15) + ' Draw', style: { display: 'flex', gap: '4px', alignItems: 'center' } }), HB.h('span', { html: HB.icon('pointer', 15) + ' Select', style: { display: 'flex', gap: '4px', alignItems: 'center' } })], PR.tool === 'draw' ? 0 : 1, i => { PR.tool = i ? 'select' : 'draw'; HB.local.set('pr.tool', PR.tool); });
+    const lab = (ic, t) => HB.h('span', { html: HB.icon(ic, 15) + ' ' + t, style: { display: 'flex', gap: '4px', alignItems: 'center' } });
+    const toolSeg = HB.ui.seg([lab('pencil', 'Draw'), lab('pointer', 'Select')], PR.tool === 'draw' ? 0 : 1, i => { PR.tool = i ? 'select' : 'draw'; HB.local.set('pr.tool', PR.tool); });
+    toolSeg.title = 'Draw: tap empty space to add a note · Select: drag empty space to box-select';
     const grid = HB.ui.select(GRIDS.map(([l, v]) => ({ value: v, label: 'Grid ' + l })), PR.grid, v => { PR.grid = +v; PR.len = +v || 0.25; need = true; });
     const vel = h('input', { type: 'range', min: 1, max: 127, value: Math.round(PR.vel * 127), 'aria-label': 'Velocity' }), velOut = h('output', null, Math.round(PR.vel * 127));
     vel.addEventListener('input', () => { velOut.textContent = vel.value; if (!PR.sel.size) PR.vel = vel.value / 127; });
     vel.addEventListener('change', () => PR.setVel(vel.value / 127));
-    const lenSel = HB.ui.select([{ value: 1, label: 'Length: 1 Bar' }, { value: 2, label: '2 Bars' }, { value: 4, label: '4 Bars' }, { value: 8, label: '8 Bars' }, { value: 16, label: '16 Bars' }], 1, v => {
+    const lenSel = HB.ui.select([{ value: 1, label: 'Region: 1 Bar' }, { value: 2, label: '2 Bars' }, { value: 4, label: '4 Bars' }, { value: 8, label: '8 Bars' }, { value: 16, label: '16 Bars' }], 1, v => {
       const f = cur(); if (!f) return; const L = +v * M.barLen();
       HB.edit('Region Length', () => { const looped = f.r.len > f.r.clen + 1e-6; f.r.clen = L; if (!looped) f.r.len = L; else f.r.len = Math.max(f.r.len, L); }, 'regions'); PR.fit();
     });
+    const follow = HB.ui.ibtn('follow', 'Follow Playhead', () => { PR.follow = !PR.follow; HB.local.set('pr.follow', PR.follow); follow.setAttribute('aria-pressed', PR.follow ? 'true' : 'false'); });
+    follow.setAttribute('aria-pressed', PR.follow ? 'true' : 'false');
+    const editBtn = HB.ui.btn('Edit', () => HB.ui.menu(editBtn, [
+      { label: 'Select All', hint: '⌘A', onClick: PR.selectAll },
+      { label: 'Duplicate', icon: 'dup', hint: '⌘D', onClick: PR.duplicate },
+      { label: 'Quantize', icon: 'quant', hint: 'Q', onClick: PR.quantize },
+      { label: 'Legato', onClick: PR.legato },
+      '-', { label: 'Octave Up', hint: '⇧↑', onClick: () => PR.transpose(12) }, { label: 'Octave Down', hint: '⇧↓', onClick: () => PR.transpose(-12) },
+      '-', { header: 'Velocity' },
+      { label: 'ff (110)', onClick: () => PR.setVel(110 / 127) }, { label: 'mf (80)', onClick: () => PR.setVel(80 / 127) }, { label: 'p (45)', onClick: () => PR.setVel(45 / 127) },
+      '-', { label: 'Delete', icon: 'trash', danger: true, hint: '⌫', onClick: PR.deleteSel },
+    ]), 'sm', 'more');
+    const viewBtn = HB.ui.btn('View', () => HB.ui.menu(viewBtn, [
+      { label: 'Fit to Region', icon: 'zoomin', onClick: PR.fit },
+      { label: 'Taller Rows', onClick: () => PR.zoomY(1.25) }, { label: 'Shorter Rows', onClick: () => PR.zoomY(0.8) },
+      '-', { label: 'Highlight Scale', checked: PR.scale, onClick: () => { PR.scale = !PR.scale; HB.local.set('pr.scale', PR.scale); need = true; } },
+      { label: 'Velocity Lane', checked: PR.velLane, onClick: () => { PR.velLane = !PR.velLane; HB.local.set('pr.vel', PR.velLane); clampScroll(cur()); need = true; } },
+      { label: 'Follow Playhead', checked: PR.follow, onClick: () => follow.click() },
+    ], { alignRight: true }), 'sm', 'chevron');
     toolEls = { vel, velOut, lenSel };
-    bar.append(toolSeg, grid,
-      HB.ui.ibtn('quant', 'Quantize (Q)', PR.quantize),
+    bar.append(toolSeg, grid, HB.ui.ibtn('quant', 'Quantize (Q)', PR.quantize),
       h('span', { class: 'sep' }),
-      h('div', { class: 'vslider' }, h('span', { class: 'tlbl' }, 'Velocity'), vel, velOut),
+      h('div', { class: 'vslider' }, h('span', { class: 'tlbl' }, 'Vel'), vel, velOut),
       h('span', { class: 'sep' }),
-      HB.ui.btn('−12', () => PR.transpose(-12), 'sm'), HB.ui.btn('−1', () => PR.transpose(-1), 'sm'), HB.ui.btn('+1', () => PR.transpose(1), 'sm'), HB.ui.btn('+12', () => PR.transpose(12), 'sm'),
-      h('span', { class: 'sep' }),
-      HB.ui.ibtn('dup', 'Duplicate (⌘D)', PR.duplicate), HB.ui.ibtn('trash', 'Delete (⌫)', PR.deleteSel),
-      HB.ui.btn('Select All', PR.selectAll, 'sm ghost'),
-      HB.ui.btn('Legato', PR.legato, 'sm ghost'),
+      HB.ui.btn('−1', () => PR.transpose(-1), 'sm'), HB.ui.btn('+1', () => PR.transpose(1), 'sm'),
+      HB.ui.ibtn('dup', 'Duplicate (⌘D)', PR.duplicate), HB.ui.ibtn('trash', 'Delete (⌫)', PR.deleteSel), editBtn,
       h('span', { class: 'grow' }),
-      lenSel,
-      HB.ui.toggle('Scale', () => PR.scale, v => { PR.scale = v; HB.local.set('pr.scale', v); need = true; }),
-      HB.ui.toggle('Velocity Lane', () => PR.velLane, v => { PR.velLane = v; HB.local.set('pr.vel', v); need = true; }),
-      HB.ui.ibtn('zoomin', 'Fit View', PR.fit),
+      follow, HB.ui.ibtn('zoomout', 'Zoom Out', () => PR.zoomX(1 / 1.4)), HB.ui.ibtn('zoomin', 'Zoom In', () => PR.zoomX(1.4)), HB.ui.btn('Fit', PR.fit, 'sm ghost'),
+      lenSel, viewBtn,
     );
   }
   function updateTools() {
@@ -3316,6 +3406,11 @@ registerProcessor('hb-recorder',HBRecorder);`;
 
   PR.frame = function () {
     if (!root || root.hidden) return;
+    // follow the playhead page by page while playing (not while the user is touching the roll)
+    if (PR.follow && T.playing && !PR._touch && !PR._pz) {
+      const f = cur();
+      if (f) { const b = T.beat() - f.r.start, x = xOf(b); if (b >= 0 && b <= f.r.len && (x > W() - 24 || x < KEYW)) { PR.sx = b * PR.px - 16; clampScroll(f); need = true; } }
+    }
     if (need) { need = false; draw(); }
     drawOv();
   };
@@ -4389,6 +4484,13 @@ registerProcessor('hb-recorder',HBRecorder);`;
     else { frac = clamp(frac, 0.18, 0.78); pane.classList.remove('collapsed'); pane.style.height = Math.round((center.clientHeight - 47) * frac) + 'px'; HB.local.set('paneH', frac); }
     HB.arrange.invalidate();
     const v = VIEWS[APP.tab](); if (v && v.invalidate) v.invalidate();
+    const mb = $('#paneMax'); if (mb) { const big = frac != null && frac >= 0.7; mb.innerHTML = HB.icon(big ? 'shrink' : 'expand', 17); mb.title = big ? 'Restore Editor Size' : 'Expand Editor'; mb.setAttribute('aria-label', mb.title); }
+  };
+  /* one tap to give the editor (piano roll, mixer…) most of the screen, and back */
+  APP.toggleMax = function () {
+    const pane = $('#pane'), ch = $('#center').clientHeight - 47, frac = pane.classList.contains('collapsed') ? 0 : pane.clientHeight / ch;
+    if (frac < 0.7) { APP._prevPane = frac > 0.18 ? frac : HB.local.get('paneH', 0.44); APP.setPane(0.78); }
+    else APP.setPane(APP._prevPane && APP._prevPane < 0.7 ? APP._prevPane : 0.44);
   };
   function bindDivider() {
     const d = $('#divider');
@@ -4588,6 +4690,7 @@ registerProcessor('hb-recorder',HBRecorder);`;
     const pt = $('#ptabs');
     TABS.forEach(([k, l, ic]) => pt.appendChild(h('button', { class: 'ptab', role: 'tab', dataset: { tab: k }, onclick: () => APP.showTab(k), html: HB.icon(ic, 17) + `<span>${l}</span>` })));
     pt.appendChild(h('span', { class: 'ptab-title', id: 'paneTitle' }));
+    pt.appendChild(h('button', { class: 'ptab ptab-max', id: 'paneMax', title: 'Expand Editor', 'aria-label': 'Expand Editor', html: HB.icon('expand', 17), onclick: () => APP.toggleMax() }));
     HB.arrange.init(); HB.piano.init(); HB.step.init(); HB.smart.init(); HB.rack.init(); HB.mixer.init(); HB.keys.init(); HB.library.init(); HB.io.init();
     HB.bus.on('save:state', s => { const el = $('#saveState'); el.textContent = s === 'dirty' ? 'Unsaved' : s === 'error' ? 'Not saved' : 'Saved'; el.classList.toggle('dirty', s !== 'saved'); });
     HB.bus.on('sel', updatePaneTitle); HB.bus.on('changed', updatePaneTitle);
@@ -4607,6 +4710,9 @@ registerProcessor('hb-recorder',HBRecorder);`;
     if (!HB.isFrame && 'serviceWorker' in navigator && (location.protocol === 'https:' || location.hostname === 'localhost' || location.hostname === '127.0.0.1')) {
       navigator.serviceWorker.register('sw.js').then(() => { APP.swState = 'Offline ready: once opened, it runs without an internet connection.'; }).catch(() => { APP.swState = 'Couldn’t enable the offline cache.'; });
     }
+    // landscape only: lock where the platform supports it (installed Android/desktop PWAs); iPadOS shows the rotate prompt instead
+    const lockLandscape = () => { try { const o = screen.orientation; if (o && o.lock) o.lock('landscape').catch(() => {}); } catch (e) {} };
+    lockLandscape(); document.addEventListener('pointerdown', lockLandscape, { once: true, capture: true });
     window.addEventListener('pagehide', () => { M.save(); });
     document.addEventListener('visibilitychange', () => { if (document.hidden) M.save(); });
   };

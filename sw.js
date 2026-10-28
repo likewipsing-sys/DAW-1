@@ -1,5 +1,5 @@
 /* Hanbit Studio service worker: keeps the whole app available offline */
-const V='studio-1.1.0-en-flat';
+const V='studio-d60c0a1ce3-flat';
 const CORE=["./", "./index.html", "./manifest.webmanifest", "./wt1-engine.js", "./glass-bell.hbplug.js", "./icon-192.png", "./icon-512.png", "./icon-maskable-512.png", "./apple-touch-icon.png", "./worklet-hb-bass.js", "./worklet-hb-crusher.js", "./worklet-hb-recorder.js"];
 self.addEventListener('install',e=>{e.waitUntil(caches.open(V).then(c=>c.addAll(CORE)).then(()=>self.skipWaiting()));});
 self.addEventListener('activate',e=>{e.waitUntil(caches.keys().then(ks=>Promise.all(ks.filter(k=>k!==V).map(k=>caches.delete(k)))).then(()=>self.clients.claim()));});
